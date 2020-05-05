@@ -1,0 +1,77 @@
+#include <Arduino.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_BME280.h>
+#include <PubSubClient.h>
+#include <ESP8266WiFi.h>
+#define SEALEVELPRESSURE_HPA (1013.25)
+
+const char* ssid = "*******";
+const char* password = "*******";
+const char* mqtt_server = "192.168.1.5";
+const char* channel = "Client";
+
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };   //physical mac address
+byte ip[] = { 192, 168, 1, 7 };                      // ip in lan 
+byte gateway[] = { 192, 168, 1, 1 };                   // internet access via router
+byte subnet[] = { 255, 255, 255, 0 };                  //subnet mask
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+Adafruit_BME280 bme; 
+ 
+void setup() {
+  Serial.begin(9600);
+ if (!bme.begin(0x76)) {
+    Serial.println(F("Not find a valid BME280 sensor"));
+    while (1);
+  }
+ 
+ 
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("Wifi connected");
+  client.setServer(mqtt_server, 1883);
+}
+ 
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    String clientId = "ESP8266Client-";
+    clientId += String(random(0xffff), HEX);
+    // Connect
+    if (client.connect(clientId.c_str())) {
+      Serial.println("connected");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+ 
+void loop() {
+ 
+  if (!client.connected()) {
+    reconnect();
+  }
+ 
+  float temperature = bme.readTemperature();
+  float humidity = bme.readHumidity();
+  float pressure = bme.readPressure()  / 100.0F;
+  
+  String v1 = ("temperature,site=Yard value=" + String(temperature));
+  client.publish(channel, v1.c_str(), true);
+  
+  v1 = ("humidity,site=Yard value=" + String(humidity));
+  client.publish(channel, v1.c_str(), true);
+ 
+  v1 = ("pressure,site=Yard value=" + String(pressure));
+  client.publish(channel, v1.c_str(), true);
+  
+  delay(50000);
+}
